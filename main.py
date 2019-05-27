@@ -92,7 +92,7 @@ if modelStruc == "densenet161":
         nn.Linear(1024,200),
     )
     clf.classifier = fc
-    optimizer = optim.Adam(params_to_update, lr=learningRate, betas=(0.5,0.999))
+    optimizer = optim.Adam(clf.parameters(), lr=learningRate, betas=(0.5,0.999))
 elif modelStruc == "vgg19Attn":
     clf = AttnVGG(num_classes=200, attention=True, normalize_attn=True)
 
@@ -103,17 +103,29 @@ elif modelStruc == "resnetAttn":
     #clf.apply(init_params)
     optimizer = optim.Adam(clf.parameters(), lr=learningRate, betas=(0.5,0.999), weight_decay=0.0001)
     #optimizer = optim.SGD(clf.parameters(), lr=learningRate, momentum=0.9, nesterov=True, weight_decay=0.0001)
-elif modelStruc == "resnext"
+elif modelStruc == "resnext101":
+    clf = models.resnext101_32x8d(pretrained=True)
+    fc = nn.Sequential(
+            nn.Linear(2048,1024),
+            nn.ReLU(inplace=True),
+            nn.Linear(1024,1024),
+            nn.ReLU(inplace=True),
+            nn.Linear(1024,200)
+        )
+    clf.fc = fc
+
 clf = clf.cuda()
 clf = torch.nn.DataParallel(clf)
 cudnn.benchmark = True
-clf.load_state_dict(torch.load(modelPath))
 
-params_to_update = []
-for name,param in clf.named_parameters():
-    if param.requires_grad == True:
-        params_to_update.append(param)
-        print("\t",name)
+if modelStruc == "resnetAttn":
+    clf.load_state_dict(torch.load(modelPath))
+
+# params_to_update = []
+# for name,param in clf.named_parameters():
+#     if param.requires_grad == True:
+#         params_to_update.append(param)
+#         print("\t",name)
 
 
 criterion = nn.CrossEntropyLoss()

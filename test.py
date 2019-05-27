@@ -25,7 +25,7 @@ class CompetetionDataset(data.Dataset):
 
 modelStruc = "resnetAttn"
 testBatchsize = 1
-modelPath = "/home/lrh/program/git/pytorch-example/competition_nh/models/resnetAttn/resnetAttn_200_compe_99.81.pth"
+modelPath = "/home/lrh/program/git/pytorch-example/competition_nh/models/resnetAttn/resnetAttn_200_compe_99.92.pth"
 mean=[0.485, 0.456, 0.406]
 std=[0.229, 0.224, 0.225]
 transforms_test = transforms.Compose([
@@ -58,7 +58,17 @@ elif modelStruc == "resnetAttn":
     #lr = 0.1
     #optimizer = optim.Adam(clf.parameters(), lr=learningRate, betas=(0.5,0.999), weight_decay=0.0001)
     #optimizer = optim.SGD(clf.parameters(), lr=learningRate, momentum=0.9, nesterov=True, weight_decay=0.0001)
-
+elif modelStruc == "resnext101":
+    clf = models.resnext101_32x8d(pretrained=True)
+    fc = nn.Sequential(
+            nn.Linear(2048,1024),
+            nn.ReLU(inplace=True),
+            nn.Linear(1024,1024),
+            nn.ReLU(inplace=True),
+            nn.Linear(1024,200)
+        )
+    clf.fc = fc
+    
 clf = clf.cuda()
 clf = torch.nn.DataParallel(clf)
 cudnn.benchmark = True
