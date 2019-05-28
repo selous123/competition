@@ -11,6 +11,7 @@ from libadver.utils import *
 import torch.backends.cudnn as cudnn
 from networks import AttnVGG
 import torch.nn.init as init
+from utils import mixup_data, mixup_criterion
 
 def init_params(net):
     '''Init layer parameters.'''
@@ -45,7 +46,7 @@ class CompetetionDataset(data.Dataset):
     def __len__(self):
         return len(self.imageNames)
 
-trainRoot = "/home/lrh/dataset/competition_nh/data.csv"
+trainRoot = "/home/lrh/dataset/competition_nh/train.csv"
 valRoot = "/home/lrh/dataset/competition_nh/val.csv"
 imgDir = "/home/lrh/dataset/competition_nh/norm_data"
 trainBatchsize = 30
@@ -53,16 +54,16 @@ valBatchsize = 4
 modelStruc = "resnetAttn"
 modelPath = "/home/lrh/program/git/pytorch-example/competition_nh/models/resnetAttn/resnetAttn_200_compe_99.81.pth"
 
-epochNum = 100
-learningRate = 2e-7
+epochNum = 40
+learningRate = 2e-4
 feature_extracted = False
 mean=[0.485, 0.456, 0.406]
 std=[0.229, 0.224, 0.225]
 transforms_train = transforms.Compose([
         #transforms.Resize([256,256]),
         #transforms.CenterCrop(224),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomCrop((224, 224), padding=4),
+        #transforms.RandomHorizontalFlip(),
+        #transforms.RandomCrop((224, 224), padding=4),
         transforms.ToTensor(),
         transforms.Normalize(mean, std)
 ])
@@ -101,7 +102,7 @@ elif modelStruc == "resnetAttn":
     clf = ResidualAttentionModel()
     #lr = 0.1
     #clf.apply(init_params)
-    optimizer = optim.Adam(clf.parameters(), lr=learningRate, betas=(0.5,0.999), weight_decay=0.0001)
+    optimizer = optim.Adam(clf.parameters(), lr=learningRate, betas=(0.5,0.999))
     #optimizer = optim.SGD(clf.parameters(), lr=learningRate, momentum=0.9, nesterov=True, weight_decay=0.0001)
 elif modelStruc == "resnext101":
     clf = models.resnext101_32x8d(pretrained=True)
@@ -118,8 +119,8 @@ clf = clf.cuda()
 clf = torch.nn.DataParallel(clf)
 cudnn.benchmark = True
 
-if modelStruc == "resnetAttn":
-    clf.load_state_dict(torch.load(modelPath))
+#if modelStruc == "resnetAttn":
+    #clf.load_state_dict(torch.load(modelPath))
 
 # params_to_update = []
 # for name,param in clf.named_parameters():
@@ -136,22 +137,38 @@ def train(epoch):
     print("train Epoch : %d\n" %epoch)
     total = 0
     correct = 0
+
+    if epoch>20:
+        is_mixup = False
+    else:
+        is_mixup = True
+
     for batchItr, (images, labels) in enumerate(trainloader):
         images, labels = images.cuda(), labels.cuda()
-        outputs = clf(images)
-        if modelStruc == "vgg19Attn":
-            outputs, _, _ = outputs
-        #torch.softmax(outputs, dim=1)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
+        if is_mixup:
 
-        predict = outputs.argmax(dim = 1)
-        total = total + images.size(0)
-        correct = correct + labels.eq(predict).sum()
+            inputs, targets_a, targets_b, lam = mixup_data(images, labels, alpha=1.0)
+            outputs = clf(inputs)
+            optimizer.zero_grad()
+            loss = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
+            loss.backward()
+            optimizer.step()
+
+        else:
+            outputs = clf(images)
+            if modelStruc == "vgg19Attn":
+                outputs, _, _ = outputs
+            #torch.softmax(outputs, dim=1)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+
+        # predict = outputs.argmax(dim = 1)
+        # total = total + images.size(0)
+        # correct = correct + labels.eq(predict).sum()
         #print(correct)
-
-        progress_bar(batchItr, len(trainloader), "loss:%.3f, ACC:%.2f%%" %(loss, 100.0 * float(correct) / total))
+        #progress_bar(batchItr, len(trainloader), "loss:%.3f, ACC:%.2f%%" %(loss, 100.0 * float(correct) / total))
+        progress_bar(batchItr, len(trainloader), "loss:%.3f" %(loss))
 
 
 def val(epoch):
@@ -179,11 +196,23 @@ if __name__=="__main__":
     for epoch in range(epochNum):
 
         if epoch == 5:
-            optimizer = optim.Adam(clf.parameters(), lr=1e-7, betas=(0.5,0.999), weight_decay=0.0001)
+            optimizer = optim.Adam(clf.parameters(), lr=1e-4, betas=(0.5,0.999))
         elif epoch == 10:
-            optimizer = optim.Adam(clf.parameters(), lr=2e-8, betas=(0.5,0.999), weight_decay=0.0001)
+            optimizer = optim.Adam(clf.parameters(), lr=2e-5, betas=(0.5,0.999))
         elif epoch == 15:
-            optimizer = optim.Adam(clf.parameters(), lr=1e-8, betas=(0.5,0.999), weight_decay=0.0001)
+            optimizer = optim.Adam(clf.parameters(), lr=1e-5, betas=(0.5,0.999))
+        elif epoch == 20:
+            optimizer = optim.Adam(clf.parameters(), lr=2e-6, betas=(0.5,0.999))
+        elif epoch == 25:
+            optimizer = optim.Adam(clf.parameters(), lr=1e-6, betas=(0.5,0.999))
+        elif epoch == 27:
+            optimizer = optim.Adam(clf.parameters(), lr=2e-7, betas=(0.5,0.999))
+        elif epoch == 30:
+            optimizer = optim.Adam(clf.parameters(), lr=1e-7, betas=(0.5,0.999))
+        elif epoch == 33:
+            optimizer = optim.Adam(clf.parameters(), lr=2e-8, betas=(0.5,0.999))
+        elif epoch == 36:
+            optimizer = optim.Adam(clf.parameters(), lr=1e-8, betas=(0.5,0.999))
 
         train(epoch)
         acc = val(epoch)
